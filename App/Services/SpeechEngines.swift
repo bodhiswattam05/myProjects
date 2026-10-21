@@ -23,6 +23,8 @@ final class AnalyzerSpeechEngine: SpeechEngine {
             return .unsupportedLanguage
         }
         let wanted = supported.identifier(.bcp47)
+        // TODO: VERIFY API — compiles against the iOS 26.5 SDK; confirm on a device that a
+        // model downloaded for Dictation shows up in `installedLocales` (airplane-mode check).
         let installed = await SpeechTranscriber.installedLocales
         return installed.contains { $0.identifier(.bcp47) == wanted } ? .ready : .needsModel
     }
