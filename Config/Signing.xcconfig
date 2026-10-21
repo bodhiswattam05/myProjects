@@ -1,0 +1,15 @@
+// The only file you need to edit before running on your own iPhone.
+//
+// 1. Set CUE_BUNDLE_ID to something unique, for example com.yourname.cue
+// 2. Set CUE_TEAM_ID to your Apple Developer team ID (Xcode → Settings → Accounts),
+//    or leave it empty and pick your team in the Signing & Capabilities tab.
+//
+// Never commit a real team ID if this repository is public. You can instead create
+// Config/Signing.local.xcconfig (git-ignored) with the same keys; it overrides this file.
+
+CUE_BUNDLE_ID = com.example.cue
+CUE_TEAM_ID =
+CUE_VERSION = 0.1.0
+CUE_BUILD = 1
+
+#include? "Signing.local.xcconfig"

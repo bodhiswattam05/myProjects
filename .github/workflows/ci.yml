@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # XcodeGen is built from this exact commit, so the committed Cue.xcodeproj can be
+  # checked byte for byte against project.yml.
+  XCODEGEN_REPO: https://github.com/yonaskolb/XcodeGen.git
+  XCODEGEN_COMMIT: 783a19e863ff906e042d061aa0a1d569d3c52ffa
+
+jobs:
+  core:
+    name: CueCore tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build (warnings are errors)
+        run: swift build --package-path Packages/CueCore --build-tests -Xswiftc -warnings-as-errors
+      - name: Test
+        run: swift test --package-path Packages/CueCore --skip-build
+
+  project-sync:
+    name: Xcode project matches project.yml
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore XcodeGen
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/xcodegen
+          key: xcodegen-linux-${{ env.XCODEGEN_COMMIT }}
+      - name: Build XcodeGen
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --filter=blob:none "$XCODEGEN_REPO" /opt/xcodegen
+          cd /opt/xcodegen
+          git checkout "$XCODEGEN_COMMIT"
+          swift build -c release
+      - name: Regenerate and compare
+        env:
+          USER: ci
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          /opt/xcodegen/.build/release/xcodegen generate --spec project.yml
+          if ! git diff --exit-code -- Cue.xcodeproj App/Info.plist; then
+            echo "::error::Cue.xcodeproj is out of date. Run 'xcodegen generate' and commit the result."
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- Cue.xcodeproj)" ]; then
+            git status --porcelain -- Cue.xcodeproj
+            echo "::error::XcodeGen produced files that aren't committed."
+            exit 1
+          fi
+
+  ios:
+    name: iOS build and tests (macOS)
+    # macOS minutes cost more: only the prototype branch and pull requests to main.
+    if: github.ref_name == 'feature/cue-prototype' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE=$(ls -d /Applications/Xcode*.app | grep -v -i beta | sort -V | tail -1)
+          [ -z "$XCODE" ] && XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i -E "ios|simulator"
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys, re
+          data = json.load(sys.stdin)["devices"]
+          def version(runtime):
+              m = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+          best = None
+          for runtime, devices in data.items():
+              if "iOS" not in runtime or version(runtime) < (26, 0):
+                  continue
+              for device in devices:
+                  if device["name"].startswith("iPhone") and device.get("isAvailable", True):
+                      key = (version(runtime), "Pro" in device["name"], device["name"])
+                      if best is None or key > best[0]:
+                          best = (key, device["udid"], device["name"], runtime)
+          if best is None:
+              sys.exit("No iPhone simulator with iOS 26 or later")
+          print(best[1])
+          print(f"{best[2]} on {best[3]}", file=sys.stderr)
+          ')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Cache derived data
+        uses: actions/cache@v4
+        with:
+          path: DerivedData
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('project.yml', 'Packages/CueCore/Package.swift') }}-${{ github.sha }}
+          restore-keys: |
+            deriveddata-${{ runner.os }}-${{ hashFiles('project.yml', 'Packages/CueCore/Package.swift') }}-
+
+      - name: Build and run unit tests
+        run: |
+          mkdir -p build
+          status=0
+          xcodebuild test \
+            -project Cue.xcodeproj \
+            -scheme Cue \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath DerivedData \
+            -only-testing:CueTests \
+            -IDEBuildingContinueBuildingAfterErrors=YES \
+            -resultBundlePath build/UnitTests.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            GCC_TREAT_WARNINGS_AS_ERRORS=YES \
+            > build/unit.log 2>&1 || status=$?
+          echo "--- errors and warnings ---"
+          grep -E "error:|warning:" build/unit.log | sort -u | head -300 || true
+          echo "--- tests ---"
+          grep -E "Test run|Suite .* (passed|failed)|✘|recorded an issue|\*\* (BUILD|TEST)" build/unit.log | head -200 || true
+          echo "--- tail ---"
+          tail -30 build/unit.log
+          exit $status
+
+      - name: UI tests
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        timeout-minutes: 25
+        run: |
+          mkdir -p build
+          set +o pipefail
+          xcodebuild test \
+            -project Cue.xcodeproj \
+            -scheme Cue \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath DerivedData \
+            -only-testing:CueUITests \
+            -resultBundlePath build/UITests.xcresult \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 300 \
+            -maximum-test-execution-time-allowance 600 \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build/ui.log | grep --line-buffered -E "error|Test Case|t = .*(Tap|Type|Wait|Find|Launch|Assert)|Executed|\*\* (BUILD|TEST)"
+          status=${PIPESTATUS[0]}
+          tail -40 build/ui.log
+          exit $status
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-logs
+          path: |
+            build/*.log
+            build/*.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
