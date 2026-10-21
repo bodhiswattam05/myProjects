@@ -127,6 +127,7 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath DerivedData \
             -only-testing:CueTests \
+            -IDEBuildingContinueBuildingAfterErrors=YES \
             -resultBundlePath build/UnitTests.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \

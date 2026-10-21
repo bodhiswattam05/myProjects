@@ -49,7 +49,6 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UILaunchScreen:
           UIColorName: LaunchBackground
-        UIRequiresFullScreen: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

@@ -300,13 +300,13 @@ final class CaptureEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
     }
 
     func startRunning() {
-        queue.async { [session] in
+        queue.async { [self] in
             if !session.isRunning { session.startRunning() }
         }
     }
 
     func stopRunning() {
-        queue.async { [session] in
+        queue.async { [self] in
             if session.isRunning { session.stopRunning() }
         }
     }
