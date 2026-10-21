@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 @main
 struct CueApp: App {
@@ -10,6 +11,8 @@ struct CueApp: App {
         if LaunchMode.isUITesting {
             // Clean, simulated app: in-memory store, fake camera and fake speech, no onboarding.
             UserDefaults.standard.set(true, forKey: PreferenceKey.hasCompletedOnboarding)
+            // Endless animations keep XCUITest waiting for the app to go idle.
+            UIView.setAnimationsEnabled(false)
             container = ModelContainerFactory.make(inMemory: true)
             _services = State(initialValue: .simulated())
             let defaults = UserDefaults(suiteName: "cue.uitests") ?? .standard
