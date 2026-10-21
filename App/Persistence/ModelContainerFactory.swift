@@ -24,6 +24,8 @@ enum ModelContainerFactory {
         } else {
             cloud = .none
         }
+        // SwiftData logs a wall of errors on first launch if this folder doesn't exist yet.
+        try? FileManager.default.createDirectory(at: .applicationSupportDirectory, withIntermediateDirectories: true)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: cloud)
         do {
             return try ModelContainer(for: schema, configurations: [configuration])
