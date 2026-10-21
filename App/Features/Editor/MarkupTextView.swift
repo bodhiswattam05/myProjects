@@ -25,11 +25,34 @@ final class MarkupTextController {
             }
         } else {
             textView.replace(range, withText: "*\(selected)*")
+            textView.delegate?.textViewDidChange?(textView)
         }
     }
 
     func dismissKeyboard() {
         textView?.resignFirstResponder()
+    }
+
+    /// The selected text and its range, or the whole script when nothing is selected.
+    func selectionOrAll() -> (range: NSRange, text: String)? {
+        guard let textView else { return nil }
+        let text = textView.text ?? ""
+        let selected = textView.selectedRange
+        if selected.length > 0, let swiftRange = Range(selected, in: text) {
+            return (selected, String(text[swiftRange]))
+        }
+        return (NSRange(location: 0, length: (text as NSString).length), text)
+    }
+
+    /// Replaces a range as if typed, so it can be undone with shake or ⌘Z.
+    func replace(_ range: NSRange, with replacement: String) {
+        guard let textView,
+              let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+              let end = textView.position(from: start, offset: range.length),
+              let textRange = textView.textRange(from: start, to: end) else { return }
+        textView.replace(textRange, withText: replacement)
+        // Programmatic edits don't always reach the delegate; make sure the binding updates.
+        textView.delegate?.textViewDidChange?(textView)
     }
 }
 

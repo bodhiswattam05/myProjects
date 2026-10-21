@@ -9,6 +9,8 @@ struct EditorView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var controller = MarkupTextController()
     @State private var presentation: Presentation?
+    @State private var polishRequest: PolishRequest?
+    @Environment(AppServices.self) private var services
 
     enum Presentation: String, Identifiable {
         case prompter
@@ -38,6 +40,10 @@ struct EditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                // Hidden entirely where on-device models aren't available.
+                if services.polisher.isAvailable {
+                    polishMenu
+                }
                 Button {
                     controller.dismissKeyboard()
                     presentation = .recorder
@@ -61,12 +67,40 @@ struct EditorView: View {
         .onChange(of: script.body) { _, _ in script.touch() }
         .onChange(of: script.title) { _, _ in script.touch() }
         .onDisappear { try? modelContext.save() }
+        .sheet(item: $polishRequest) { request in
+            PolishDiffSheet(request: request, wordsPerMinute: script.wordsPerMinute, polisher: services.polisher) { revised in
+                controller.replace(request.range, with: revised)
+            }
+        }
         .fullScreenCover(item: $presentation) { presentation in
             switch presentation {
             case .prompter: PrompterLauncher(script: script)
             case .recorder: RecorderLauncher(script: script)
             }
         }
+    }
+
+    private var polishMenu: some View {
+        Menu {
+            Section("Selected text, or the whole script") {
+                Button(PolishAction.makeSpoken.title, systemImage: "quote.bubble") { requestPolish(.makeSpoken) }
+                Menu("Trim to…", systemImage: "scissors") {
+                    ForEach([15, 30, 45, 60, 90], id: \.self) { seconds in
+                        Button(PolishAction.trim(seconds: seconds).title) { requestPolish(.trim(seconds: seconds)) }
+                    }
+                }
+                Button(PolishAction.addPauses.title, systemImage: "pause") { requestPolish(.addPauses) }
+            }
+        } label: {
+            Label("Polish", systemImage: "wand.and.sparkles")
+        }
+        .accessibilityIdentifier("editor.polish")
+    }
+
+    private func requestPolish(_ action: PolishAction) {
+        guard let selection = controller.selectionOrAll(), !selection.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        controller.dismissKeyboard()
+        polishRequest = PolishRequest(action: action, range: selection.range, original: selection.text)
     }
 
     @ViewBuilder

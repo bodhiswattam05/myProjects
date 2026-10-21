@@ -215,3 +215,27 @@ struct LensPlacementTests {
         #expect(placement.heightFraction == 1)
     }
 }
+
+@MainActor
+@Suite("Script polish")
+struct PolishTests {
+    @Test func cleanStripsPreambleAndQuotes() {
+        #expect(PolishPrompt.clean("Here's the rewrite:\n\"We're ready.\"") == "We're ready.")
+        #expect(PolishPrompt.clean("  “Short and sweet.”  ") == "Short and sweet.")
+        #expect(PolishPrompt.clean("Plain text") == "Plain text")
+    }
+
+    @Test func trimPromptTargetsWordCount() {
+        let prompt = PolishPrompt.prompt(for: "text", action: .trim(seconds: 30), wordsPerMinute: 140)
+        #expect(prompt.contains("about 70 words"))
+    }
+
+    @Test func simulatedPolisherSuggestsAndRefusesNoOps() async throws {
+        let polisher = SimulatedPolisher()
+        let revised = try await polisher.polish("We are here. It is time.", action: .makeSpoken, wordsPerMinute: 140)
+        #expect(revised == "We're here. It's time.")
+        await #expect(throws: PolishError.self) {
+            try await polisher.polish("Nothing to change", action: .makeSpoken, wordsPerMinute: 140)
+        }
+    }
+}

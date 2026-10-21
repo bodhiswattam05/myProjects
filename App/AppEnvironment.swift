@@ -12,12 +12,14 @@ final class AppServices {
     /// Present whenever `speech` is simulated, so the Debug screen can script it.
     let simulatedSpeech: SimulatedSpeechService?
     let permissions: PermissionCenter
+    let polisher: any ScriptPolishing
 
-    init(camera: any CameraControlling, speech: any SpeechRecognizing, simulatedSpeech: SimulatedSpeechService? = nil, permissions: PermissionCenter) {
+    init(camera: any CameraControlling, speech: any SpeechRecognizing, simulatedSpeech: SimulatedSpeechService? = nil, permissions: PermissionCenter, polisher: any ScriptPolishing) {
         self.camera = camera
         self.speech = speech
         self.simulatedSpeech = simulatedSpeech
         self.permissions = permissions
+        self.polisher = polisher
     }
 
     /// Real camera and speech on devices; simulated camera in the Simulator.
@@ -27,13 +29,13 @@ final class AppServices {
         #else
         let camera: any CameraControlling = LiveCameraService()
         #endif
-        return AppServices(camera: camera, speech: LiveSpeechService(), permissions: PermissionCenter())
+        return AppServices(camera: camera, speech: LiveSpeechService(), permissions: PermissionCenter(), polisher: FoundationModelsPolisher())
     }
 
     /// Everything simulated: previews, UI tests, and the Debug fake-transcript player.
     static func simulated() -> AppServices {
         let speech = SimulatedSpeechService()
-        return AppServices(camera: SimulatedCameraService(), speech: speech, simulatedSpeech: speech, permissions: PermissionCenter())
+        return AppServices(camera: SimulatedCameraService(), speech: speech, simulatedSpeech: speech, permissions: PermissionCenter(), polisher: SimulatedPolisher())
     }
 }
 
