@@ -1,0 +1,18 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.moved-aside
+# SwiftPM
+.build/
+.swiftpm/
+Packages/*/.build/
+# macOS
+.DS_Store
+# Signing — never commit
+*.p8
+*.p12
+*.mobileprovision
+Config/Signing.local.xcconfig
