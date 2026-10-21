@@ -91,7 +91,7 @@ final class PrompterViewModel {
     var readingLineY: Double { stageHeight * settings.readingLinePosition }
 
     var maxOffset: Double {
-        lineFrames.values.map(\.minY).max() ?? 0
+        Double(lineFrames.values.map(\.minY).max() ?? 0)
     }
 
     /// The line whose text sits in the reading band.

@@ -12,7 +12,7 @@ enum StageDimming: Equatable {
 /// The script, laid out for the stage. Only re-renders when its inputs change (dimming
 /// moves a line or a word at a time), not on every scroll frame.
 struct StageTextColumn: View, Equatable {
-    static let coordinateSpace = "stage-content"
+    nonisolated static let coordinateSpace = "stage-content"
 
     let document: ScriptDocument
     let settings: PrompterSettings
